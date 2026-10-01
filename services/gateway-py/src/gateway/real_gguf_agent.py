@@ -1,12 +1,10 @@
 """AIFuzzer Real GGUF Model Target Agent
 
-Yerel GGUF modelini (Qwen 2.5 3B Coder vb.) llama-cpp ile yükleyip
+Yerel GGUF modelini (Qwen 2.5 3B Coder vb.) llama-cpp ile dinamik yükleyip
 doğrudan canlı fuzzing hedefi olarak çalıştırır.
 """
+import importlib
 import logging
-import os
-from dataclasses import dataclass
-from typing import Optional
 
 from .mock_agent import AgentExecutionResult
 
@@ -38,9 +36,10 @@ class GGUFTargetAgent:
 
         logger.info(f"Loading GGUF model from {model_path} (n_ctx={n_ctx}, n_gpu_layers={n_gpu_layers})...")
         try:
-            from llama_cpp import Llama
+            llama_cpp = importlib.import_module("llama_cpp")
+            llama_cls = llama_cpp.Llama
 
-            self.llm = Llama(
+            self.llm = llama_cls(
                 model_path=model_path,
                 n_ctx=n_ctx,
                 n_gpu_layers=n_gpu_layers,
@@ -48,7 +47,7 @@ class GGUFTargetAgent:
                 verbose=False,
             )
             logger.info("Real GGUF Model successfully loaded into memory!")
-        except Exception as e:
+        except (ImportError, RuntimeError, ValueError) as e:
             logger.error(f"Failed to load GGUF model: {e}")
             raise
 
@@ -68,6 +67,6 @@ class GGUFTargetAgent:
             )
             content = response["choices"][0]["message"]["content"] or ""
             return AgentExecutionResult(response_text=content)
-        except Exception as e:
+        except (RuntimeError, ValueError) as e:
             logger.error(f"Error during GGUF inference: {e}")
-            return AgentExecutionResult(response_text=f"Error executing model: {str(e)}")
+            return AgentExecutionResult(response_text=f"Error executing model: {e!s}")
