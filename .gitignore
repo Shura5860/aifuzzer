@@ -1,0 +1,43 @@
+# Rust
+/target
+Cargo.lock
+
+# Python & uv
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Database & Corpus outputs
+*.sqlite
+*.sqlite3
+*.db
+/corpus/crashes/
+/corpus/hangs/
+/corpus/minimized/
+/corpus/queue/
+/runs/
+/logs/
+*.pdf
+aifuzzer_report.md
+regression_suite.json
+ROADMAP.md
+docs/ENTERPRISE_IMPLEMENTATION_PLAN.md
+
+# Environment & Secrets
+.env
+*.local.env
+
+# IDEs & OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store

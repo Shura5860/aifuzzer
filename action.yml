@@ -1,0 +1,69 @@
+name: 'AIFuzzer Security & Robustness Action'
+description: 'Automated gray-box fuzzing and regulatory compliance (OWASP/NIST) auditing for LLMs and AI Agents'
+author: 'İbrahim Kalaycı <ibrahimval60@gmail.com>'
+
+inputs:
+  gateway_url:
+    description: 'Target Gateway service URL (default starts local mock target)'
+    required: false
+    default: 'http://127.0.0.1:50051'
+  max_iterations:
+    description: 'Number of fuzzing campaign iterations'
+    required: false
+    default: '30'
+  fail_on_bypass:
+    description: 'Fail the CI step if any deterministic bypass or canary leak is detected'
+    required: false
+    default: 'true'
+  minimize:
+    description: 'Run Delta Debugging (DDmin) on discovered bypasses'
+    required: false
+    default: 'true'
+
+outputs:
+  report_path:
+    description: 'Path to generated Markdown security report'
+    value: 'aifuzzer_report.md'
+  regression_suite:
+    description: 'Path to deduplicated regression test suite'
+    value: 'regression_suite.json'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run AIFuzzer Security Campaign
+      shell: bash
+      run: |
+        set -e
+        echo "Starting AIFuzzer CI/CD Security Audit..."
+        export PATH="$HOME/.local/bin:$PATH"
+
+        # 1. Local Gateway & Mock LLM
+        uv run --project services/gateway-py python -m gateway.server &
+        SERVER_PID=$!
+        trap "kill $SERVER_PID 2>/dev/null || true" EXIT
+        sleep 2
+
+        # 2. Run Fuzzer with parameters
+        FAIL_FLAG=""
+        if [ "${{ inputs.fail_on_bypass }}" = "true" ]; then
+          FAIL_FLAG="--fail-on-bypass"
+        fi
+
+        MIN_FLAG=""
+        if [ "${{ inputs.minimize }}" = "true" ]; then
+          MIN_FLAG="--minimize"
+        fi
+
+        cargo run -p aifuzzer -- \
+          --gateway-url "${{ inputs.gateway_url }}" \
+          --max-iterations "${{ inputs.max_iterations }}" \
+          $MIN_FLAG $FAIL_FLAG
+
+        # 3. Triage & Dedup
+        uv run --project services/gateway-py python -m gateway.triage
+
+        # 4. Attach report to GitHub Actions Step Summary (if available)
+        if [ -n "$GITHUB_STEP_SUMMARY" ] && [ -f "aifuzzer_report.md" ]; then
+          cat aifuzzer_report.md >> $GITHUB_STEP_SUMMARY
+        fi

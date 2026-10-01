@@ -1,0 +1,22 @@
+version: "3.8"
+
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: services/gateway-py/Dockerfile
+    ports:
+      - "50051:50051"
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  fuzzer:
+    build:
+      context: .
+      dockerfile: crates/aifuzzer/Dockerfile
+    depends_on:
+      - gateway
+    volumes:
+      - ./corpus:/app/corpus
+      - ./runs:/app/runs
+    command: ["--gateway-url", "http://gateway:50051", "--max-iterations", "50", "--minimize"]

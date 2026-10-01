@@ -1,0 +1,34 @@
+[workspace]
+members = [
+    "crates/aifuzzer",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["İbrahim Kalaycı <ibrahimval60@gmail.com>"]
+license = "AGPL-3.0-only"
+repository = "https://github.com/ibrahimkalayci/aifuzzer"
+readme = "README.md"
+
+[workspace.dependencies]
+tokio = { version = "1.43", features = ["full"] }
+tonic = "0.12"
+prost = "0.13"
+tonic-build = "0.12"
+prost-types = "0.13"
+rusqlite = { version = "0.33", features = ["bundled"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+clap = { version = "4.5", features = ["derive", "env"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rand = "0.8"
+regex = "1.11"
+thiserror = "2.0"
+anyhow = "1.0"
+uuid = { version = "1.12", features = ["v4", "fast-rng"] }
+chrono = { version = "0.4", features = ["serde"] }
+base64 = "0.22"
+tempfile = "3.17"

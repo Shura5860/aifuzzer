@@ -1,0 +1,91 @@
+syntax = "proto3";
+
+package aifuzzer;
+
+// -----------------------------------------------------------------------------
+// Target Execution & Deterministik Oracle
+// -----------------------------------------------------------------------------
+
+enum PayloadLocation {
+  PAYLOAD_LOCATION_UNSPECIFIED = 0;
+  PAYLOAD_LOCATION_USER_MESSAGE = 1;
+  PAYLOAD_LOCATION_SYSTEM_PROMPT = 2;
+  PAYLOAD_LOCATION_RAG_DOCUMENT = 3;
+  PAYLOAD_LOCATION_TOOL_OUTPUT = 4;
+  PAYLOAD_LOCATION_MEMORY_CONTEXT = 5;
+}
+
+message FuzzTargetRequest {
+  string test_case_id = 1;
+  string prompt = 2;
+  PayloadLocation payload_location = 3;
+  repeated string expected_canary_tokens = 4;
+  map<string, string> metadata = 5;
+}
+
+message FuzzTargetResponse {
+  string test_case_id = 1;
+  bool success = 2;
+  
+  // Deterministik Oracle Bayrakları (Crash / Bypass Tespiti)
+  bool is_bypass = 3;
+  bool canary_leaked = 4;
+  bool unauthorized_tool_called = 5;
+  bool sandbox_policy_violated = 6;
+  string violation_details = 7;
+
+  // Gray-Box Fitness Sinyalleri (Near-miss ve Coverage)
+  double raw_guardrail_score = 8;     // 0.0 (tamamen engellendi) - 1.0 (tamamen aşıldı)
+  repeated string triggered_defense_layers = 9; // Tetiklenen katmanlar/kural ID'leri
+  repeated double rejection_logits = 10;        // Varsa güvenlik sınıflandırıcısı logitleri
+
+  // İnceleme & Triage Verisi
+  string response_text = 11;
+  string called_tool_name = 12;
+  string called_tool_arguments_json = 13;
+  uint64 latency_ms = 14;
+}
+
+message HealthCheckRequest {
+  string service_name = 1;
+}
+
+message HealthCheckResponse {
+  bool healthy = 1;
+  string message = 2;
+}
+
+service TargetGatewayService {
+  rpc Execute (FuzzTargetRequest) returns (FuzzTargetResponse);
+  rpc HealthCheck (HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// -----------------------------------------------------------------------------
+// Semantik Mutatör (Python LLM Worker)
+// -----------------------------------------------------------------------------
+
+enum SemanticMutationStrategy {
+  MUTATION_STRATEGY_UNSPECIFIED = 0;
+  MUTATION_STRATEGY_PARAPHRASE = 1;
+  MUTATION_STRATEGY_ROLEPLAY_FRAME = 2;
+  MUTATION_STRATEGY_HYPOTHETICAL = 3;
+  MUTATION_STRATEGY_TRANSLATION_CHAIN = 4;
+}
+
+message SemanticMutateRequest {
+  string seed_text = 1;
+  SemanticMutationStrategy strategy = 2;
+  double temperature = 3;
+  double similarity_threshold = 4; // Semantik sapmayı (drift) önleme eşiği
+}
+
+message SemanticMutateResponse {
+  bool success = 1;
+  string mutated_text = 2;
+  double cosine_similarity = 3;
+  string error_message = 4;
+}
+
+service SemanticMutatorService {
+  rpc MutateSemantic (SemanticMutateRequest) returns (SemanticMutateResponse);
+}

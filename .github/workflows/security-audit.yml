@@ -1,0 +1,53 @@
+name: AIFuzzer Security & Robustness Audit
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  fuzz-audit:
+    name: Continuous AI Security Testing
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Generate Protobuf & Verify
+        run: make proto
+
+      - name: Code Quality & Lint
+        run: make lint
+
+      - name: Run Unit Tests
+        run: make test
+
+      - name: Execute AIFuzzer DevSecOps Audit
+        uses: ./
+        with:
+          max_iterations: '25'
+          fail_on_bypass: 'false' # PR bloke etmeden denetim raporu üret
+          minimize: 'true'
+
+      - name: Archive Security Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: aifuzzer-security-report
+          path: |
+            aifuzzer_report.md
+            regression_suite.json
