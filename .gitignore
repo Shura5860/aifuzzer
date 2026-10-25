@@ -31,6 +31,8 @@ htmlcov/
 *.pdf
 /aifuzzer_report.md
 /regression_suite.json
+report_*.md
+/models/
 docs/ENTERPRISE_IMPLEMENTATION_PLAN.md
 
 # Environment & Secrets
