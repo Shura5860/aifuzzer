@@ -1,0 +1,20 @@
+[
+  {
+    "strategy": "AIFuzzer (Gray-Box MAP-Elites + MAB)",
+    "total_iterations": 40,
+    "total_executions": 328,
+    "duration_sec": 2.33,
+    "unique_bypasses": 20,
+    "occupied_niches": 27,
+    "coverage_pct": 50.0
+  },
+  {
+    "strategy": "Random Mutation Baseline (Black-Box / No Feedback)",
+    "total_iterations": 40,
+    "total_executions": 328,
+    "duration_sec": 2.21,
+    "unique_bypasses": 10,
+    "occupied_niches": 12,
+    "coverage_pct": 22.5
+  }
+]

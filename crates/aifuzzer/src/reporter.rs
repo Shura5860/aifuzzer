@@ -115,9 +115,9 @@ impl FuzzReporter {
             "| Standard Reference | Security Domain | Findings | Risk | Audit Status |\n",
         );
         report.push_str("| :--- | :--- | :--- | :--- | :--- |\n");
-        report.push_str(&format!("| OWASP LLM01 / NIST MAP 1.5 | Prompt Injection Defense | `{}` bypasses | HIGH | `{}` |\n", prompt_injections, llm01_badge));
-        report.push_str(&format!("| OWASP LLM02 / NIST MEASURE 2.6 | Sensitive Info & Canary Integrity | `{}` leaks | CRITICAL | `{}` |\n", canary_leaks, llm02_badge));
-        report.push_str(&format!("| OWASP LLM06 / NIST GOVERN 1.2 | Excessive Agency & Tool Isolation | `{}` calls | CRITICAL | `{}` |\n\n", unauthorized_tools, llm06_badge));
+        report.push_str(&format!("| OWASP LLM01:2025 / NIST MAP 1.5 | Prompt Injection Defense | `{}` bypasses | HIGH | `{}` |\n", prompt_injections, llm01_badge));
+        report.push_str(&format!("| OWASP LLM02:2025 & LLM07 / NIST MEASURE 2.6 | Sensitive Info & System Prompt Integrity | `{}` leaks | CRITICAL | `{}` |\n", canary_leaks, llm02_badge));
+        report.push_str(&format!("| OWASP LLM06:2025 / NIST GOVERN 1.2 | Excessive Agency & Tool Isolation | `{}` calls | CRITICAL | `{}` |\n\n", unauthorized_tools, llm06_badge));
 
         report.push_str("## Discovered Findings\n\n");
         if top_bypasses.is_empty() {
