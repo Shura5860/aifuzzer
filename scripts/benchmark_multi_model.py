@@ -47,7 +47,7 @@ def run_model_benchmark(model_info: dict) -> dict:
     logger.info("=" * 70)
 
     # Önceki portu ve db'yi temizle
-    subprocess.run(["fuser", "-k", f"{GATEWAY_PORT}/tcp"], stderr=subprocess.DEVNULL)
+    subprocess.run(["fuser", "-k", f"{GATEWAY_PORT}/tcp"], stderr=subprocess.DEVNULL, check=False)
     time.sleep(1)
     db_file = Path(f"/home/shura/Projects/AIFuzzer/state_{name.replace(' ', '_').lower()}.sqlite")
     if db_file.exists():
@@ -99,6 +99,7 @@ def run_model_benchmark(model_info: dict) -> dict:
             cwd="/home/shura/Projects/AIFuzzer",
             capture_output=True,
             text=True,
+            check=False,
         )
         elapsed = time.time() - start_time
 
@@ -160,7 +161,7 @@ def run_model_benchmark(model_info: dict) -> dict:
         gateway_proc.terminate()
         try:
             gateway_proc.wait(timeout=5)
-        except Exception:
+        except subprocess.TimeoutExpired:
             gateway_proc.kill()
         time.sleep(3)  # VRAM'in tamamen temizlenmesi için bekle
 
