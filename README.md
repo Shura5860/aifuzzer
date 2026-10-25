@@ -22,7 +22,7 @@ Testing the safety boundaries of AI Agents and LLMs typically relies on black-bo
 
 `aifuzzer` adapts classical coverage-guided software testing principles (inspired by AFL, AFL++, and libFuzzer) to AI systems:
 - **Deterministic Oracles:** Replaces prompt-based judges with canary/honeytoken detection, policy sandboxes, and unauthorized tool-invocation tracking.
-- **Gray-Box Feedback:** Uses guardrail classifier raw scores and defense-layer activations as an operational proxy for code branch coverage.
+- **Proxy Feedback-Guided Search (Gray-Box Analogy):** Traditional software fuzzing instruments binary branch coverage. Because LLM weights and logits are often opaque or quantized, `aifuzzer` computes surrogate coverage signals using semantic embedding distances (`sentence-transformers/all-MiniLM-L6-v2`) and gateway defense-layer triggers.
 - **MAP-Elites Quality-Diversity:** Maintains a multi-dimensional niche grid to explore diverse attack classes simultaneously.
 - **Delta Debugging (DDmin):** Automatically isolates the minimal bypass payload to streamline remediation.
 - **Triage and Clustering:** Groups raw findings by underlying root cause using TF-IDF and DBSCAN, producing reproducible regression test suites.
@@ -35,10 +35,10 @@ Testing the safety boundaries of AI Agents and LLMs typically relies on black-bo
 
 | Dimension | **AIFuzzer** | **NVIDIA Garak** [^garak] | **Microsoft PyRIT** [^pyrit] | **Promptfoo** [^promptfoo] |
 |---|---|---|---|---|
-| **Primary Paradigm** | **Gray-Box Coverage-Guided Fuzzing** | Vulnerability Scanner / Probing | Red-Teaming Orchestration Framework | CI/CD Matrix & Prompt Eval |
+| **Primary Paradigm** | **Feedback-Guided Fuzzing (Surrogate Gray-Box)** | Vulnerability Scanner / Probing | Red-Teaming Orchestration Framework | CI/CD Matrix & Prompt Eval |
 | **Exploration Engine** | **MAP-Elites Grid (54 Niches) + MAB** | Static & generative probe lists | Multi-turn algorithms (PAIR, TAP, Crescendo) | Matrix test permutations |
 | **Evaluation Oracles** | **Deterministic Canaries + Proxy Distances** | Regex, HF Classifiers & LLM-as-a-judge | Sub-string, self-ask, HF models & LLM judges | Regex, Webhooks, Asserts & LLM judges |
-| **Mutator Throughput (CPU)** | **~4,200 mutations/sec** (Native Rust) | Native Python string generation | Native Python / API-driven | Node.js string operations |
+| **Mutator Throughput (CPU)** | **~4,200 mutations/sec** [^bench_hw] | Native Python string generation | Native Python / API-driven | Node.js string operations |
 | **Target Eval Bottleneck** | **Inference-bound** (0.06 - 0.40 req/s local GGUF) | Inference-bound (depends on target LLM/API) | Inference-bound (depends on target LLM/API) | Inference-bound (depends on target LLM/API) |
 | **Automated PoC Reduction** | **Zeller DDmin (Delta Debugging)** | None (raw response logged) | Manual / Not built-in | None |
 | **Deduplication Strategy** | **Embedding + DBSCAN Cluster Triage** | Run report aggregation | Memory database & scoring logs | Assertion failure diffs |
@@ -47,12 +47,13 @@ Testing the safety boundaries of AI Agents and LLMs typically relies on black-bo
 [^garak]: NVIDIA Garak focuses on comprehensive vulnerability probing across known taxonomies with static generators and classifier detectors.
 [^pyrit]: Microsoft PyRIT is an extensible red-teaming framework supporting automated multi-turn attack strategies (PAIR, Crescendo) and multi-modal targets.
 [^promptfoo]: Promptfoo is an assertion-based LLM testing and evaluation tool optimized for prompt engineering and regression testing.
+[^bench_hw]: In-memory lexical/encoding mutator benchmark measured on AMD Ryzen 5 5600 (single worker thread, pure Rust without disk/network I/O).
 
 ---
 
 ## OWASP LLM Top 10 (2025) & NIST AI RMF Mapping
 
-`aifuzzer` maps discovered bypass vectors and guardrail activations directly to established industry standards:
+`aifuzzer` maps discovered bypass vectors and gateway defense-layer triggers directly to established industry standards [^nist_ref]:
 
 | Vulnerability Category | Industry Standard | AIFuzzer Detection Mechanism & Mutator Engine |
 |---|---|---|
@@ -62,6 +63,8 @@ Testing the safety boundaries of AI Agents and LLMs typically relies on black-bo
 | **Excessive Agency & Unsafe Tool Use** | OWASP **LLM06:2025** / NIST GOVERN 1.2 | Sandbox parameter inspection, unauthorized tool whitelist violation checks |
 | **System Prompt Leakage** | OWASP **LLM07:2025** / NIST MEASURE 2.6 | Extraction canary verification & meta-prompt override detectors |
 | **Safety Guardrail Degradation** | NIST AI RMF **MEASURE 2.6** | Multi-layer near-miss distance measurement (via embedding & refusal boundary scoring) |
+
+[^nist_ref]: Aligned with official NIST.AI.100-1 (Artificial Intelligence Risk Management Framework AI RMF 1.0 Core) subcategory definitions.
 
 ---
 
@@ -156,18 +159,22 @@ When testing black-box or quantized GGUF models where internal logits/attention 
 3. **Delimiter Wrapping (Qwen 2.5 Coder 3B)**:
    Qwen 2.5 was sensitive to fake system delimiter injection (`placement::delimiter_wrap`), leaking confidential tokens when enclosed in pseudo-XML sandboxes.
 
-### Baseline Comparison: Gray-Box MAP-Elites vs. Black-Box Random Mutation
+### Baseline Comparison: Feedback-Guided vs. Black-Box Random Mutation
 
-To rigorously evaluate the hypothesis that *gray-box feedback guidance outperforms unguided random mutation under identical iteration budgets*, we benchmarked AIFuzzer against a black-box baseline (equal initial seeds, 40 iterations, 328 target executions):
+To evaluate whether *feedback-guided mutation outperforms unguided random mutation under identical iteration budgets*, we benchmarked AIFuzzer against a uniform random black-box baseline on the reference target environment (**`MockTargetAgent`** — a standardized sandbox with regex policy guards and high-entropy canary tokens). 
 
-| Strategy / Metric | Search Paradigm | Total Executions | Discovered Bypasses | MAP-Elites Niches Occupied | Coverage Ratio |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **AIFuzzer (Core)** | **Gray-Box (MAP-Elites + MAB Bandit)** | **328** | **20 unique bypasses** | **27 / 54 niches** | **50.0%** |
-| **Random Baseline** | Black-Box (Uniform Mutation / No Feedback) | 328 | 10 unique bypasses | 12 / 54 niches | 22.5% |
+Both strategies were executed across **5 independent runs** (30 iterations per run, ~248 target evaluations per run):
 
-**Key Takeaway**: Under identical execution budgets, gray-box feedback guidance produced a **2.0x higher bypass discovery count** and achieved **2.2x broader semantic space coverage** (avoiding local optima traps).
+| Strategy | Search Paradigm | Unique Bypasses Discovered [^bypass_def] | MAP-Elites Niches (Secondary Metric) | Evaluation Inferences |
+| :--- | :--- | :--- | :--- | :--- |
+| **AIFuzzer (Core)** | **Feedback-Guided (MAP-Elites + MAB)** | **11.6 ± 12.8** | **27.6 ± 0.9 niches** (51.1%) | 248.4 ± 16.1 |
+| **Random Baseline** | Black-Box (Uniform Mutation / No Feedback) | 6.2 ± 5.3 | 11.4 ± 0.6 niches (21.1%) | 248.4 ± 16.1 |
 
-*(Raw machine-readable comparison available at [examples/baseline_comparison.json](examples/baseline_comparison.json)).*
+[^bypass_def]: Defined as distinct pre-triage prompt strings that successfully exfiltrated the canary token or breached tool permission boundaries.
+
+**Observation & Analysis**: Under identical iteration constraints, feedback guidance yielded higher average bypass discovery (`11.6` vs `6.2`). A plausible explanation is that niche-based selection maintains diverse prompt structures across length and defense interactions rather than collapsing into single mutation types.
+
+*(Raw machine-readable 5-run statistical comparison available at [examples/baseline_comparison.json](examples/baseline_comparison.json)).*
 
 ---
 
@@ -243,8 +250,8 @@ Run automated security fuzzing on pull requests using the official action:
 
 1. **Stochastic Output Drift**: While deterministic oracles eliminate heuristic judge errors, non-zero temperature models introduce variance in prompt reproducibility. Use `temperature=0.0` for regression tracking.
 2. **Context Window Saturation**: Extended multi-turn mutators and large crossover pools can exceed target context limits. The minimizer mitigates this by aggressively pruning tokens.
-3. **Guardrail Metric Proxies**: Gray-box feedback relies on guardrail activation layers and classifier scores. On purely opaque black-box APIs without logprobs or safety metadata, feedback falls back to black-box adaptive bandit heuristics.
-4. **Model Scale & Generalization Boundaries**: The empirical benchmarks reported here were gathered on quantized 3B–4B parameter models running under 4-bit precision. Vulnerability rates, bypass frequencies, and tokenizer responses may differ substantially on 70B+ or frontier commercial models (e.g. GPT-4o, Claude 3.5 Sonnet).
+3. **Surrogate Metric Proxies**: Feedback guidance relies on proxy distance signals (embedding divergence and defense-layer triggers). On black-box APIs lacking logprobs or safety metadata, feedback falls back to black-box bandit heuristics.
+4. **Model Scale & Generalization Boundaries**: The empirical benchmarks reported here were gathered on quantized 3B–4B parameter models running under 4-bit precision. Vulnerability rates, bypass frequencies, and tokenizer responses may differ substantially on 70B+ or frontier commercial models.
 
 ---
 
@@ -253,21 +260,23 @@ Run automated security fuzzing on pull requests using the official action:
 ```text
 .
 ├── crates/
-│   └── aifuzzer/           # Rust core: Scheduler, mutators, minimizer, SQLite storage
+│   └── aifuzzer/                     # Rust core: Scheduler, mutators, minimizer, SQLite storage
 ├── services/
-│   └── gateway-py/         # Python services: Target gateway, oracles, semantic mutators, triage
+│   └── gateway-py/                   # Python services: Target gateway, oracles, semantic mutators, triage
 ├── proto/
-│   └── fuzzer.proto        # Protocol Buffers / gRPC contract specifications
+│   └── fuzzer.proto                  # Protocol Buffers / gRPC contract specifications
 ├── corpus/
-│   ├── seeds/              # Initial seed corpus
-│   ├── crashes/            # Verified bypasses captured during campaigns
-│   └── minimized/          # Compact PoCs produced by Delta Debugging
+│   ├── seeds/                        # Initial seed corpus
+│   ├── crashes/                      # Verified bypasses captured during campaigns
+│   └── minimized/                    # Compact PoCs produced by Delta Debugging
 ├── examples/
-│   └── aifuzzer_report.md  # Sample generated security audit report
-├── Makefile                # Project automation targets
-├── action.yml              # GitHub Action definition
-├── docker-compose.yml      # Multi-container setup
-└── ROADMAP.md              # Milestones, multi-model benchmarks, and planned features
+│   ├── aifuzzer_report.md            # Sample generated security audit report
+│   ├── multi_model_benchmark.json    # Machine-readable multi-model empirical results
+│   └── baseline_comparison.json      # 5-run statistical baseline comparison (Mean ± Std)
+├── Makefile                          # Project automation targets
+├── action.yml                        # GitHub Action definition
+├── docker-compose.yml                # Multi-container setup
+└── ROADMAP.md                        # Milestones, multi-model benchmarks, and planned features
 ```
 
 ---
@@ -329,7 +338,7 @@ Yapay zeka ajanlarının güvenlik sınırlarını test etmek genellikle siyah k
 
 `aifuzzer`, klasik yazılım güvenliğindeki (AFL, AFL++, libFuzzer) temel kavramları yapay zeka sistemlerine uyarlar:
 - **Deterministik Oracle'lar:** Yanıltılabilen LLM judge'lar yerine; sistem promptuna ve belleğe gizlenen canary/honeytoken takibi, sandbox yetki aşımı ve mock araç parametre ihlallerini baz alır.
-- **Gray-Box Geri Bildirim:** Guardrail sınıflandırıcılarının ham skorlarını ve savunma katmanı tetiklenmelerini, kod coverage dengi olarak kullanır.
+- **Vekil Geri Bildirimli Arama (Gray-Box Analojisi):** Klasik yazılım fuzzing'i ikili dal (branch) kapsamını kullanır. LLM ağırlıkları ve logit değerleri genellikle kapalı veya kuantize olduğundan, `aifuzzer` anlamsal embedding mesafeleri (`sentence-transformers/all-MiniLM-L6-v2`) ve gateway savunma katmanı tetiklenmelerini operasyonel bir *vekil (surrogate) kapsam sinyali* olarak kullanır.
 - **MAP-Elites Quality-Diversity:** Tek bir saldırı tipine saplanıp kalmamak için 54 nişli 3D arama ızgarası tutar.
 - **Delta Debugging (DDmin):** Zeller DDmin algoritması ile uzun bypass metinlerini zafiyeti tetikleyen en küçük Proof-of-Concept (PoC) haline getirir.
 - **Triage ve Kümeleme:** Bulunan bypass'ları TF-IDF ve DBSCAN ile analiz ederek kök nedenlerine göre kümeler ve otomatik regresyon test seti üretir.
@@ -342,10 +351,10 @@ Yapay zeka ajanlarının güvenlik sınırlarını test etmek genellikle siyah k
 
 | Karşılaştırma Boyutu | **AIFuzzer** | **NVIDIA Garak** [^garak_tr] | **Microsoft PyRIT** [^pyrit_tr] | **Promptfoo** [^promptfoo_tr] |
 |---|---|---|---|---|
-| **Temel Test Yaklaşımı** | **Gray-Box Kapsam Odaklı Fuzzing** | Zafiyet Tarayıcı / Prob Tabanlı | Kırmızı Takım Orkestrasyon Çerçevesi | Matris Testi & İstem Değerlendirme |
+| **Temel Test Yaklaşımı** | **Geri Bildirimli Fuzzing (Vekil Gray-Box)** | Zafiyet Tarayıcı / Prob Tabanlı | Kırmızı Takım Orkestrasyon Çerçevesi | Matris Testi & İstem Değerlendirme |
 | **Keşif ve Arama Motoru**| **MAP-Elites Izgarası (54 Niş) + MAB** | Statik ve üretken prob listeleri | Çok adımlı algoritmalar (PAIR, TAP, Crescendo) | Matris kombinasyonları |
 | **Doğrulama (Oracle)** | **Deterministik Canary + Mesafe Skorları** | Regex, HF Sınıflandırıcılar & LLM Hakem | Altdize, HuggingFace modelleri & LLM Hakem | Regex, Webhook, İddialar & LLM Hakem |
-| **Mutasyon Üretim Hızı** | **~4.200 mutasyon/sn** (Yerel Rust) | Python metin üretimi | Python / API güdümlü | Node.js metin işlemleri |
+| **Mutasyon Üretim Hızı** | **~4.200 mutasyon/sn** [^bench_hw_tr] | Python metin üretimi | Python / API güdümlü | Node.js metin işlemleri |
 | **Değerlendirme Darboğazı** | **Model Çıkarımına Bağlı** (Yerel GGUF'ta ~0.06 - 0.40 istek/sn) | Model Çıkarımına Bağlı (Hedef LLM/API) | Model Çıkarımına Bağlı (Hedef LLM/API) | Model Çıkarımına Bağlı (Hedef LLM/API) |
 | **Otomatik PoC Küçültme**| **Zeller DDmin (Delta Debugging)** | Yok (ham yanıt loglanır) | Manuel / Yerleşik değil | Yok |
 | **Kök Neden Kümeleme**| **TF-IDF & DBSCAN Kümeleme** | Toplu çalıştırma raporu | Bellek veritabanı & skor logları | İddia fark tablosu |
@@ -354,6 +363,7 @@ Yapay zeka ajanlarının güvenlik sınırlarını test etmek genellikle siyah k
 [^garak_tr]: NVIDIA Garak, bilinen taksonomiler üzerinden statik üreteçler ve sınıflandırıcılarla kapsamlı zafiyet taramasına odaklanır.
 [^pyrit_tr]: Microsoft PyRIT, çok adımlı uyarlanabilir saldırı stratejilerini (PAIR, Crescendo) ve çok modlu hedefleri destekleyen genişletilebilir bir kırmızı takım kütüphanesidir.
 [^promptfoo_tr]: Promptfoo, istem mühendisliği ve regresyon testleri için optimize edilmiş assertion tabanlı bir değerlendirme aracıdır.
+[^bench_hw_tr]: Bellek içi sözcüksel/kodlama mutasyon kıyaslaması AMD Ryzen 5 5600 üzerinde ölçülmüştür (tek iş parçacığı, disk/ağ I/O olmaksızın saf Rust).
 
 ---
 
@@ -424,7 +434,10 @@ AIFuzzer'ın sahte/simüle ajanların ötesinde, gerçek açık kaynaklı ağır
 > **Tekrar Edilebilirlik ve Varyans Notu**: Başlangıç tohum havuzunun büyüklüğüne ve mutasyon döngü sayısına göre test metrikleri doğal olarak farklılık gösterir. Örneğin tekil ilk Qwen denemesinde (42 istek / 6 bypass) kullanılan tohum dağılımı ile yukarıdaki çoklu model karşılaştırma koşusunda (44 istek / 8 bypass) kullanılan parametreler birbirinden bağımsızdır; her iki testin de ham SQLite soy ağacı kayıtları repoda izole dosyalarda saklanmaktadır.
 
 ### GGUF Modellerinde Gray-Box Sinyali Nasıl Elde Ediliyor?
-AIFuzzer, iç tensörlerine ve logit değerlerine erişilemeyen yerel GGUF modelleri test ederken, modelin önüne entegre `GrayBoxEvaluator` (`evaluator.py`) servisini kullanır. Bu bileşen; anlamsal embedding mesafesi (`all-MiniLM-L6-v2`), güvenlik anahtar kelimelerine leksikal yakınlık (near-miss) ve çok katmanlı kural tetiklenmelerini ölçerek MAP-Elites ızgarası için operasyonel bir *vekil (surrogate) kapsam sinyali* üretir.
+AIFuzzer, iç tensörlerine ve logit değerlerine erişilemeyen yerel GGUF modelleri test ederken, modelin önüne entegre `GrayBoxEvaluator` (`evaluator.py`) servisini kullanır. Bu bileşen; anlamsal embedding mesafesi (`all-MiniLM-L6-v2`), güvenlik anahtar kelimelerine leksikal yakınlık (near-miss) ve çok katmanlı kural tetiklenmelerini ölçerek MAP-Elites ızgarası için operasyonel bir *vekil (surrogate) kapsam sinyali* üretir. Gateway servisi 3 ana savunma katmanını simüle eder:
+1. **L1 (Sözcüksel Filtreler)**: Regex kontrolleri ve zararlı komut ayırıcı (delimiter) tespiti.
+2. **L2 (Anlamsal Yakınlık)**: Rol yapma ve sanallaştırma niyetine karşı embedding mesafesi.
+3. **L3 (Sızıntı ve Yetki Sınırı)**: Canary honeytoken ifşası ve yetkisiz araç çağırma beyaz listesi denetimi.
 
 ### 3. Öne Çıkan Deneyimsel Gözlemler
 1. **Unicode Sıfır Genişlikli Boşluk Zafiyeti (Microsoft Phi-3.5 Mini)**:
@@ -438,18 +451,20 @@ AIFuzzer, iç tensörlerine ve logit değerlerine erişilemeyen yerel GGUF model
 3. **Delimiter Wrapping (Qwen 2.5 Coder 3B)**:
    Qwen 2.5 modeli sahte sistem XML blokları ve ROT13 kodlamasıyla sistem promptu kısıtlamalarını aştı (8 bypass).
 
-### 4. Baseline Karşılaştırması: Gray-Box MAP-Elites vs. Siyah Kutu Rastgele Mutasyon
+### 4. Baseline Karşılaştırması: Geri Bildirimli Arama vs. Siyah Kutu Rastgele Mutasyon
 
-AIFuzzer'ın *"Geri bildirimli gray-box yaklaşımı, eşit istek bütçesinde geri bildirimsiz siyah kutu rastgele mutasyondan daha etkilidir"* hipotezini deneysel olarak doğrulamak için yapılan karşılaştırma sonuçları (eşit başlangıç tohumları, 40 iterasyon, 328 hedef model çalıştırması):
+AIFuzzer'ın *"Geri bildirimli arama yönlendirmesi, eşit iterasyon bütçesinde geri bildirimsiz rastgele mutasyondan daha etkilidir"* hipotezini test etmek amacıyla, referans hedef ortamında (**`MockTargetAgent`** — regex politika kuralları ve canary token içeren referans korumalı ortam) **5 bağımsız koşu** (koşu başına 30 iterasyon, ortalama ~248 model değerlendirmesi) gerçekleştirilmiştir:
 
-| Test Stratejisi | Arama Paradigması | Toplam Çalıştırma | Keşfedilen Bypass | Doldurulan Niş Sayısı | MAP-Elites Kapsamı |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **AIFuzzer (Çekirdek)** | **Gray-Box (MAP-Elites + MAB)** | **328** | **20 Benzersiz Bypass** | **27 / 54 Niş** | **%50.0** |
-| **Rastgele Baseline** | Siyah Kutu (Geri Bildirimsiz Mutasyon) | 328 | 10 Benzersiz Bypass | 12 / 54 Niş | %22.5 |
+| Test Stratejisi | Arama Paradigması | Keşfedilen Benzersiz Bypass [^bypass_def_tr] | MAP-Elites Niş Doluluğu (İkincil Metrik) | Model Çalıştırması |
+| :--- | :--- | :--- | :--- | :--- |
+| **AIFuzzer (Çekirdek)** | **Geri Bildirimli (MAP-Elites + MAB)** | **11.6 ± 12.8** | **27.6 ± 0.9 niş** (%51.1) | 248.4 ± 16.1 |
+| **Rastgele Baseline** | Siyah Kutu (Geri Bildirimsiz Tekdüze Mutasyon) | 6.2 ± 5.3 | 11.4 ± 0.6 niş (%21.1) | 248.4 ± 16.1 |
 
-**Temel Çıkarım**: Eşit bütçe altında gray-box geri bildirim mekanizması, **2 kat daha fazla benzersiz zafiyet** keşfetmiş ve arama uzayında yerel tuzaklara düşmeyerek **2.2 kat daha geniş bir anlamsal saldırı çeşitliliği (%50.0)** sağlamıştır.
+[^bypass_def_tr]: Triage kümelemesi öncesinde canary token sızdıran veya yetki sınırını aşan birbirinden farklı ham saldırı istemi dizgileri olarak tanımlanır.
 
-*(Doğrulanabilir ham karşılaştırma verisi için [examples/baseline_comparison.json](examples/baseline_comparison.json) dosyasını inceleyebilirsiniz).*
+**Gözlem ve Değerlendirme**: Eşit iterasyon kısıtı altında geri bildirimli arama daha yüksek bir ortalama bypass keşfi sağlamıştır (`11.6` vs `6.2`). Bunun olası bir açıklaması, niş tabanlı koruma mekanizmasının mutasyonları tek bir saldırı kalıbına sıkıştırmayıp farklı uzunluk ve savunma katmanları boyunca çeşitlendirmesidir.
+
+*(5 koşulu istatistiksel ham karşılaştırma verisi için [examples/baseline_comparison.json](examples/baseline_comparison.json) dosyasını inceleyebilirsiniz).*
 
 ---
 

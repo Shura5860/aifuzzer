@@ -1,20 +1,126 @@
-[
-  {
-    "strategy": "AIFuzzer (Gray-Box MAP-Elites + MAB)",
-    "total_iterations": 40,
-    "total_executions": 328,
-    "duration_sec": 2.33,
-    "unique_bypasses": 20,
-    "occupied_niches": 27,
-    "coverage_pct": 50.0
+{
+  "benchmark_metadata": {
+    "target": "MockTargetAgent (Reference Guardrail Sandbox with Canary Honeytokens)",
+    "iterations_per_run": 30,
+    "total_runs_per_strategy": 5,
+    "unique_bypass_definition": "Distinct pre-triage adversarial prompts triggering canary token exfiltration or policy violation."
   },
-  {
-    "strategy": "Random Mutation Baseline (Black-Box / No Feedback)",
-    "total_iterations": 40,
-    "total_executions": 328,
-    "duration_sec": 2.21,
-    "unique_bypasses": 10,
-    "occupied_niches": 12,
-    "coverage_pct": 22.5
+  "strategies": {
+    "feedback_guided_map_elites": {
+      "name": "AIFuzzer Feedback-Guided (MAP-Elites + MAB)",
+      "bypasses": {
+        "mean": 11.6,
+        "std": 12.82
+      },
+      "occupied_niches": {
+        "mean": 27.6,
+        "std": 0.89
+      },
+      "executions": {
+        "mean": 248.4,
+        "std": 16.09
+      }
+    },
+    "random_black_box_baseline": {
+      "name": "Random Mutation Baseline (Uniform Sampling / No Feedback)",
+      "bypasses": {
+        "mean": 6.2,
+        "std": 5.26
+      },
+      "occupied_niches": {
+        "mean": 11.4,
+        "std": 0.55
+      },
+      "executions": {
+        "mean": 248.4,
+        "std": 16.09
+      }
+    }
+  },
+  "raw_runs": {
+    "feedback_guided": [
+      {
+        "strategy": "Feedback-Guided (MAP-Elites + MAB)",
+        "seed": 1,
+        "total_executions": 259,
+        "duration_sec": 0.42,
+        "bypasses": 0,
+        "occupied_niches": 28
+      },
+      {
+        "strategy": "Feedback-Guided (MAP-Elites + MAB)",
+        "seed": 2,
+        "total_executions": 261,
+        "duration_sec": 0.46,
+        "bypasses": 16,
+        "occupied_niches": 28
+      },
+      {
+        "strategy": "Feedback-Guided (MAP-Elites + MAB)",
+        "seed": 3,
+        "total_executions": 249,
+        "duration_sec": 0.51,
+        "bypasses": 32,
+        "occupied_niches": 26
+      },
+      {
+        "strategy": "Feedback-Guided (MAP-Elites + MAB)",
+        "seed": 4,
+        "total_executions": 252,
+        "duration_sec": 0.42,
+        "bypasses": 5,
+        "occupied_niches": 28
+      },
+      {
+        "strategy": "Feedback-Guided (MAP-Elites + MAB)",
+        "seed": 5,
+        "total_executions": 221,
+        "duration_sec": 0.38,
+        "bypasses": 5,
+        "occupied_niches": 28
+      }
+    ],
+    "baseline": [
+      {
+        "strategy": "Random Mutation (Black-Box / No Feedback)",
+        "seed": 1,
+        "total_executions": 259,
+        "duration_sec": 0.4,
+        "bypasses": 1,
+        "occupied_niches": 12
+      },
+      {
+        "strategy": "Random Mutation (Black-Box / No Feedback)",
+        "seed": 2,
+        "total_executions": 261,
+        "duration_sec": 0.44,
+        "bypasses": 9,
+        "occupied_niches": 11
+      },
+      {
+        "strategy": "Random Mutation (Black-Box / No Feedback)",
+        "seed": 3,
+        "total_executions": 249,
+        "duration_sec": 0.49,
+        "bypasses": 14,
+        "occupied_niches": 11
+      },
+      {
+        "strategy": "Random Mutation (Black-Box / No Feedback)",
+        "seed": 4,
+        "total_executions": 252,
+        "duration_sec": 0.4,
+        "bypasses": 3,
+        "occupied_niches": 11
+      },
+      {
+        "strategy": "Random Mutation (Black-Box / No Feedback)",
+        "seed": 5,
+        "total_executions": 221,
+        "duration_sec": 0.36,
+        "bypasses": 4,
+        "occupied_niches": 12
+      }
+    ]
   }
-]
+}
