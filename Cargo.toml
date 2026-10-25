@@ -9,7 +9,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["İbrahim Kalaycı <ibrahimval60@gmail.com>"]
 license = "AGPL-3.0-only"
-repository = "https://github.com/ibrahimkalayci/aifuzzer"
+repository = "https://github.com/Shura5860/aifuzzer"
 readme = "README.md"
 
 [workspace.dependencies]

@@ -1,7 +1,9 @@
 //! MAP-Elites ve Power Schedule Birim Testleri
 
 use aifuzzer::corpus::SeedRecord;
-use aifuzzer::scheduler::map_elites::{DefenseLayerBucket, LengthBucket, MapElitesGrid, MutatorFamily};
+use aifuzzer::scheduler::map_elites::{
+    DefenseLayerBucket, LengthBucket, MapElitesGrid, MutatorFamily,
+};
 use aifuzzer::scheduler::power_schedule::PowerSchedule;
 
 #[test]

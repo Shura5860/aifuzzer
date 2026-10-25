@@ -15,7 +15,11 @@ fn test_mutator_pool_executes_all() {
     for _ in 0..50 {
         let mutator = pool.select_random().expect("Mutator seçilmeli");
         let mutated = mutator.mutate(original);
-        assert!(!mutated.is_empty(), "Mutasyon boş olamaz: {}", mutator.name());
+        assert!(
+            !mutated.is_empty(),
+            "Mutasyon boş olamaz: {}",
+            mutator.name()
+        );
     }
 }
 

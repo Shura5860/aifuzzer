@@ -19,16 +19,18 @@ htmlcov/
 *.sqlite
 *.sqlite3
 *.db
-/corpus/crashes/
+/corpus/crashes/*
+!/corpus/crashes/.gitkeep
 /corpus/hangs/
-/corpus/minimized/
-/corpus/queue/
+/corpus/minimized/*
+!/corpus/minimized/.gitkeep
+/corpus/queue/*
+!/corpus/queue/.gitkeep
 /runs/
 /logs/
 *.pdf
-aifuzzer_report.md
-regression_suite.json
-ROADMAP.md
+/aifuzzer_report.md
+/regression_suite.json
 docs/ENTERPRISE_IMPLEMENTATION_PLAN.md
 
 # Environment & Secrets

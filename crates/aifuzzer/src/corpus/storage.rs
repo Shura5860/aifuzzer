@@ -164,7 +164,9 @@ impl CorpusStorage {
     }
 
     pub fn count_bypasses(&self) -> Result<usize> {
-        let mut stmt = self.conn.prepare("SELECT COUNT(*) FROM seeds WHERE is_bypass = 1")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT COUNT(*) FROM seeds WHERE is_bypass = 1")?;
         let count: i64 = stmt.query_row([], |row| row.get(0))?;
         Ok(count as usize)
     }

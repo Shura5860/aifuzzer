@@ -101,7 +101,10 @@ impl FuzzEngine {
 
             // 1. MAP-Elites havuzundan elit tohum seçimi
             let chosen_seed = elites.choose(&mut rng).unwrap().clone();
-            let count = self.selection_counts.entry(chosen_seed.id.clone()).or_insert(0);
+            let count = self
+                .selection_counts
+                .entry(chosen_seed.id.clone())
+                .or_insert(0);
             *count += 1;
 
             // 2. Power schedule ile enerji tahsisi
@@ -115,7 +118,8 @@ impl FuzzEngine {
 
                 let (mutated_prompt, mutator_name) = if elites.len() > 1 && roll < 0.15 {
                     let other_seed = elites.choose(&mut rng).unwrap();
-                    let hybrid = CrossoverEngine::crossover(&chosen_seed.prompt, &other_seed.prompt);
+                    let hybrid =
+                        CrossoverEngine::crossover(&chosen_seed.prompt, &other_seed.prompt);
                     (hybrid, "crossover::hybrid".to_string())
                 } else if roll < 0.30 {
                     // Semantik Mutasyon (Python gRPC servisi üzerinden)
@@ -126,23 +130,37 @@ impl FuzzEngine {
                     ];
                     let strat = *strategies.choose(&mut rng).unwrap();
                     let strat_name = match strat {
-                        crate::proto::SemanticMutationStrategy::MutationStrategyRoleplayFrame => "semantic::roleplay",
-                        crate::proto::SemanticMutationStrategy::MutationStrategyParaphrase => "semantic::paraphrase",
+                        crate::proto::SemanticMutationStrategy::MutationStrategyRoleplayFrame => {
+                            "semantic::roleplay"
+                        }
+                        crate::proto::SemanticMutationStrategy::MutationStrategyParaphrase => {
+                            "semantic::paraphrase"
+                        }
                         _ => "semantic::hypothetical",
                     };
 
-                    match self.client.mutate_semantic(&chosen_seed.prompt, strat).await {
+                    match self
+                        .client
+                        .mutate_semantic(&chosen_seed.prompt, strat)
+                        .await
+                    {
                         Ok(resp) if resp.success => (resp.mutated_text, strat_name.to_string()),
                         _ => {
                             let (idx, mutator) = self.mutator_pool.select_adaptive().unwrap();
                             applied_mutator_idx = Some(idx);
-                            (mutator.mutate(&chosen_seed.prompt), mutator.name().to_string())
+                            (
+                                mutator.mutate(&chosen_seed.prompt),
+                                mutator.name().to_string(),
+                            )
                         }
                     }
                 } else {
                     let (idx, mutator) = self.mutator_pool.select_adaptive().unwrap();
                     applied_mutator_idx = Some(idx);
-                    (mutator.mutate(&chosen_seed.prompt), mutator.name().to_string())
+                    (
+                        mutator.mutate(&chosen_seed.prompt),
+                        mutator.name().to_string(),
+                    )
                 };
 
                 let child_id = format!("mut-{}-{}", i, Uuid::new_v4().simple());
@@ -207,7 +225,11 @@ impl FuzzEngine {
     }
 
     /// Çoklu paralel worker havuzu (Distributed/Concurrent Fuzzing Engine)
-    pub async fn run_campaign_concurrent(&mut self, iterations: usize, concurrency: usize) -> Result<FuzzStats> {
+    pub async fn run_campaign_concurrent(
+        &mut self,
+        iterations: usize,
+        concurrency: usize,
+    ) -> Result<FuzzStats> {
         if concurrency <= 1 {
             return self.run_campaign(iterations).await;
         }
@@ -234,7 +256,12 @@ impl FuzzEngine {
                 let mutator = self.mutator_pool.select_random().unwrap();
                 let mutated = mutator.mutate(&chosen.prompt);
                 let child_id = format!("dist-{}-{}", w, Uuid::new_v4().simple());
-                candidates.push((child_id, chosen.id.clone(), mutated, mutator.name().to_string()));
+                candidates.push((
+                    child_id,
+                    chosen.id.clone(),
+                    mutated,
+                    mutator.name().to_string(),
+                ));
             }
 
             // Tokio JoinSet ile paralel Gateway istekleri

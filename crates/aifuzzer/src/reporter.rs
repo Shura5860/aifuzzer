@@ -15,9 +15,13 @@ impl FuzzReporter {
     pub fn print_dashboard(stats: &FuzzStats, elapsed: Duration) {
         let execs_per_sec = (stats.total_executions as f64) / elapsed.as_secs_f64().max(0.001);
 
-        println!("\n\x1b[1;36m+-------------------------------------------------------------+\x1b[0m");
+        println!(
+            "\n\x1b[1;36m+-------------------------------------------------------------+\x1b[0m"
+        );
         println!("\x1b[1;36m|                     \x1b[1;32mAIFUZZER SUMMARY DASHBOARD\x1b[1;36m              |\x1b[0m");
-        println!("\x1b[1;36m+-------------------------------------------------------------+\x1b[0m");
+        println!(
+            "\x1b[1;36m+-------------------------------------------------------------+\x1b[0m"
+        );
         println!(
             "\x1b[1;37m| Total Executions     :\x1b[0m \x1b[1;33m{:<35}\x1b[1;36m|\x1b[0m",
             stats.total_executions
@@ -42,7 +46,9 @@ impl FuzzReporter {
             "\x1b[1;37m| Total Campaign Time  :\x1b[0m \x1b[1;37m{:<29.2?}\x1b[1;36m|\x1b[0m",
             elapsed
         );
-        println!("\x1b[1;36m+-------------------------------------------------------------+\x1b[0m\n");
+        println!(
+            "\x1b[1;36m+-------------------------------------------------------------+\x1b[0m\n"
+        );
     }
 
     /// GitHub dostu detaylı Markdown raporu üretir.
@@ -63,10 +69,23 @@ impl FuzzReporter {
         report.push_str("## Executive Summary\n\n");
         report.push_str("| Metric | Value |\n");
         report.push_str("| :--- | :--- |\n");
-        report.push_str(&format!("| Total Target Executions | `{}` |\n", stats.total_executions));
-        report.push_str(&format!("| Execution Throughput | `{:.1} execs/sec` |\n", execs_per_sec));
-        report.push_str(&format!("| Unique Bypasses Discovered | `{}` |\n", stats.total_bypasses));
-        report.push_str(&format!("| MAP-Elites Coverage | `{:.1}%` (`{}` / 54 niches) |\n\n", stats.coverage_ratio * 100.0, stats.occupied_niches));
+        report.push_str(&format!(
+            "| Total Target Executions | `{}` |\n",
+            stats.total_executions
+        ));
+        report.push_str(&format!(
+            "| Execution Throughput | `{:.1} execs/sec` |\n",
+            execs_per_sec
+        ));
+        report.push_str(&format!(
+            "| Unique Bypasses Discovered | `{}` |\n",
+            stats.total_bypasses
+        ));
+        report.push_str(&format!(
+            "| MAP-Elites Coverage | `{:.1}%` (`{}` / 54 niches) |\n\n",
+            stats.coverage_ratio * 100.0,
+            stats.occupied_niches
+        ));
 
         // Kurumsal Uyumluluk Matrisi (OWASP & NIST AI RMF)
         report.push_str("## Regulatory Compliance Audit\n\n");
@@ -76,11 +95,25 @@ impl FuzzReporter {
         let unauthorized_tools = top_bypasses.iter().filter(|b| b.unauthorized_tool).count();
         let prompt_injections = stats.total_bypasses;
 
-        let llm01_badge = if prompt_injections > 0 { "[FAIL]" } else { "[PASS]" };
-        let llm02_badge = if canary_leaks > 0 { "[FAIL - CRITICAL]" } else { "[PASS]" };
-        let llm06_badge = if unauthorized_tools > 0 { "[FAIL - CRITICAL]" } else { "[PASS]" };
+        let llm01_badge = if prompt_injections > 0 {
+            "[FAIL]"
+        } else {
+            "[PASS]"
+        };
+        let llm02_badge = if canary_leaks > 0 {
+            "[FAIL - CRITICAL]"
+        } else {
+            "[PASS]"
+        };
+        let llm06_badge = if unauthorized_tools > 0 {
+            "[FAIL - CRITICAL]"
+        } else {
+            "[PASS]"
+        };
 
-        report.push_str("| Standard Reference | Security Domain | Findings | Risk | Audit Status |\n");
+        report.push_str(
+            "| Standard Reference | Security Domain | Findings | Risk | Audit Status |\n",
+        );
         report.push_str("| :--- | :--- | :--- | :--- | :--- |\n");
         report.push_str(&format!("| OWASP LLM01 / NIST MAP 1.5 | Prompt Injection Defense | `{}` bypasses | HIGH | `{}` |\n", prompt_injections, llm01_badge));
         report.push_str(&format!("| OWASP LLM02 / NIST MEASURE 2.6 | Sensitive Info & Canary Integrity | `{}` leaks | CRITICAL | `{}` |\n", canary_leaks, llm02_badge));
@@ -90,7 +123,9 @@ impl FuzzReporter {
         if top_bypasses.is_empty() {
             report.push_str("No bypasses discovered during this execution campaign.\n\n");
         } else {
-            report.push_str("| Seed ID | Mutator Family | Canary Leaked | Unauthorized Tool | Fitness |\n");
+            report.push_str(
+                "| Seed ID | Mutator Family | Canary Leaked | Unauthorized Tool | Fitness |\n",
+            );
             report.push_str("| :--- | :--- | :--- | :--- | :--- |\n");
             for b in top_bypasses.iter().take(10) {
                 report.push_str(&format!(
@@ -104,7 +139,12 @@ impl FuzzReporter {
             }
             report.push_str("\n### Sample Findings\n\n");
             for (idx, b) in top_bypasses.iter().take(3).enumerate() {
-                report.push_str(&format!("#### #{}: `{}` (Mutator: `{}`)\n", idx + 1, b.id, b.mutator_applied.as_deref().unwrap_or("Unknown")));
+                report.push_str(&format!(
+                    "#### #{}: `{}` (Mutator: `{}`)\n",
+                    idx + 1,
+                    b.id,
+                    b.mutator_applied.as_deref().unwrap_or("Unknown")
+                ));
                 report.push_str("```text\n");
                 report.push_str(&b.prompt);
                 report.push_str("\n```\n\n");

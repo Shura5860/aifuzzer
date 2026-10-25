@@ -49,7 +49,11 @@ impl GatewayClient {
             similarity_threshold: 0.20,
         });
 
-        let res = self.semantic_client.mutate_semantic(req).await?.into_inner();
+        let res = self
+            .semantic_client
+            .mutate_semantic(req)
+            .await?
+            .into_inner();
         Ok(res)
     }
 

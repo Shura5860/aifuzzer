@@ -33,7 +33,8 @@ impl PowerSchedule {
         let count_dampening = 1.0 / ((selection_count + 1) as f64).sqrt();
 
         // 3. Nihai enerji
-        let calculated = (self.base_energy as f64 * fitness_factor * count_dampening).round() as usize;
+        let calculated =
+            (self.base_energy as f64 * fitness_factor * count_dampening).round() as usize;
 
         // Taban enerjiden az olamaz, tavan enerjiyi geçemez
         calculated.clamp(1, self.max_energy)

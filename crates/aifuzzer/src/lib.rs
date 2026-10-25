@@ -15,6 +15,6 @@ pub use client::GatewayClient;
 pub use corpus::{CorpusStorage, SeedRecord};
 pub use minimizer::Minimizer;
 pub use mutators::{Mutator, MutatorPool};
+pub use proto::*;
 pub use reporter::FuzzReporter;
 pub use scheduler::{FuzzEngine, FuzzStats, MapElitesGrid};
-pub use proto::*;

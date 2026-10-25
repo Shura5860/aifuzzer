@@ -85,10 +85,16 @@ impl Mutator for MarkdownWrapMutator {
         let mut rng = thread_rng();
         let templates = [
             format!("```markdown\n<!-- DEBUG_MODE_PAYLOAD -->\n{}\n```", input),
-            format!("{{\"instruction_payload\": \"{}\"}}", input.replace('"', "\\\"")),
+            format!(
+                "{{\"instruction_payload\": \"{}\"}}",
+                input.replace('"', "\\\"")
+            ),
             format!("---BEGIN CONTEXT---\n{}\n---END CONTEXT---", input),
         ];
 
-        templates.choose(&mut rng).cloned().unwrap_or_else(|| input.to_string())
+        templates
+            .choose(&mut rng)
+            .cloned()
+            .unwrap_or_else(|| input.to_string())
     }
 }
