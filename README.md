@@ -93,7 +93,7 @@ The system uses a decoupled client-server architecture over gRPC:
 |       ├── Target Agent / LLM Interface (Built-in Mock, Ollama, OpenAI-compatible) |
 |       ├── Honeytoken & Canary Exfiltration Detector                               |
 |       ├── Tool Execution Sandbox & Policy Verifier                                |
-|       └── Defense Evaluator (Near-miss distances and activation layers)           |
+|       └── Defense Evaluator (Near-miss distances and defense-layer triggers)      |
 |                                                                                   |
 |  [ Semantic Mutator Service ] (Roleplay, Paraphrase, Drift Guard)                 |
 |  [ Triage & Clustering Engine ] (TF-IDF & DBSCAN Deduplication)                   |
@@ -129,7 +129,7 @@ Findings are processed through a TF-IDF vectorizer and DBSCAN clusterer to disti
 To validate the engine against real model weights on consumer hardware, we evaluated `aifuzzer` across three modern small language models under identical deterministic conditions (`temperature=0.0`, `seed=42`, `n_gpu_layers=28`).
 
 ### Hardware Testbed
-- **CPU**: AMD Ryzen 5 5600 6-Core (12 vCPUs)
+- **CPU**: AMD Ryzen 5 5600 6-Core (12 vCPU threads)
 - **GPU**: NVIDIA GeForce RTX 3060 Ti (8 GB GDDR6 VRAM, CUDA 13.4, Driver 615.71.09)
 - **Engine**: AIFuzzer Core v0.1.0 (Rust Tokio + MAP-Elites + MAB Adaptive Mutator)
 - **IPC Protocol**: High-Speed Local gRPC / Protobuf v3
@@ -144,8 +144,11 @@ To validate the engine against real model weights on consumer hardware, we evalu
 
 > **Reproducibility & Variance Note**: Individual campaign metrics naturally vary across test runs depending on initial seed corpus selection and iteration allocation. Earlier isolated single-target runs (e.g. 42 inferences / 6 bypasses) used different initial seed sets compared to the standardized multi-model harness above (44 inferences / 8 bypasses). Raw lineages for both campaigns are preserved in the respective SQLite state files.
 
-### Gray-Box Feedback Mechanism on GGUF Models
-When testing black-box or quantized GGUF models where internal logits/attention weights are inaccessible, `aifuzzer` generates gray-box proxy signals via the `GrayBoxEvaluator` service (`evaluator.py`). This component computes semantic embedding distance (`sentence-transformers/all-MiniLM-L6-v2`), near-miss lexical distance to safety keywords, and defense layer triggers to construct operational surrogate coverage metrics for the MAP-Elites grid.
+### Surrogate Feedback Mechanism on GGUF Models
+When testing black-box or quantized GGUF models where internal logits/attention weights are inaccessible, `aifuzzer` generates surrogate feedback signals via the `GrayBoxEvaluator` service (`evaluator.py`). This component monitors three distinct defensive layers:
+1. **L1 (Lexical Sanitizers)**: Regex input rules and structural delimiter escaping.
+2. **L2 (Semantic Intent)**: Embedding vector distance to policy violation topics (`all-MiniLM-L6-v2`).
+3. **L3 (Exfiltration & Policy Guards)**: Canary string exfiltration monitoring and tool whitelist barriers.
 
 ### Key Experimental Observations
 1. **Unicode Zero-Width Blindspot (Microsoft Phi-3.5 Mini)**:
@@ -163,18 +166,21 @@ When testing black-box or quantized GGUF models where internal logits/attention 
 
 To evaluate whether *feedback-guided mutation outperforms unguided random mutation under identical iteration budgets*, we benchmarked AIFuzzer against a uniform random black-box baseline on the reference target environment (**`MockTargetAgent`** — a standardized sandbox with regex policy guards and high-entropy canary tokens). 
 
-Both strategies were executed across **5 independent runs** (30 iterations per run, ~248 target evaluations per run):
+To address statistical variance and right-skewed distributions common in fuzzing, both strategies were evaluated across **20 independent runs** (30 iterations per run). We report **Median [Interquartile Range: Q1 – Q3]** as the primary robust metric, alongside parametric Mean ± Std:
 
-| Strategy | Search Paradigm | Unique Bypasses Discovered [^bypass_def] | MAP-Elites Niches (Secondary Metric) | Evaluation Inferences |
+| Strategy | Search Paradigm | Unique Bypasses Discovered [^bypass_def] | MAP-Elites Niches (Secondary Metric) | Evaluation Inferences [^paired_note] |
 | :--- | :--- | :--- | :--- | :--- |
-| **AIFuzzer (Core)** | **Feedback-Guided (MAP-Elites + MAB)** | **11.6 ± 12.8** | **27.6 ± 0.9 niches** (51.1%) | 248.4 ± 16.1 |
-| **Random Baseline** | Black-Box (Uniform Mutation / No Feedback) | 6.2 ± 5.3 | 11.4 ± 0.6 niches (21.1%) | 248.4 ± 16.1 |
+| **AIFuzzer (Core)** | **Feedback-Guided (MAP-Elites + MAB)** | **13.5 [6.0 – 32.0]** *(Mean: 19.6 ± 20.7)* | **29.0 [27.0 – 30.0]** *(Mean: 27.9 ± 3.0)* | 254.0 [247.0 – 261.0] |
+| **Random Baseline** | Black-Box (Uniform Mutation / No Feedback) | **6.5 [2.0 – 16.0]** *(Mean: 9.4 ± 9.5)* | **11.0 [10.0 – 11.0]** *(Mean: 10.4 ± 1.2)* | 254.0 [247.0 – 261.0] |
 
 [^bypass_def]: Defined as distinct pre-triage prompt strings that successfully exfiltrated the canary token or breached tool permission boundaries.
+[^paired_note]: Evaluated using a **paired budget protocol**: each random baseline trial strictly inherits its exact target evaluation count from the corresponding matching fuzzer seed to ensure an identical query budget.
 
-**Observation & Analysis**: Under identical iteration constraints, feedback guidance yielded higher average bypass discovery (`11.6` vs `6.2`). A plausible explanation is that niche-based selection maintains diverse prompt structures across length and defense interactions rather than collapsing into single mutation types.
+**Statistical Observations & Honesty Note**:
+- **Bypass Discovery**: The median bypass count was **2.08x higher** under feedback guidance (`13.5` vs `6.5`). However, due to high campaign-to-campaign stochastic variance (standard deviation comparable to the mean), individual short runs overlap; sustained separation requires larger iteration budgets.
+- **Niche Coverage**: The secondary metric of niche occupancy (`29.0` vs `11.0`) is structurally favored by MAP-Elites optimization, indicating that niche partitioning successfully avoids collapsing into single mutation archetypes.
 
-*(Raw machine-readable 5-run statistical comparison available at [examples/baseline_comparison.json](examples/baseline_comparison.json)).*
+*(Raw machine-readable 20-run statistical comparison available at [examples/baseline_comparison.json](examples/baseline_comparison.json)).*
 
 ---
 
@@ -252,6 +258,7 @@ Run automated security fuzzing on pull requests using the official action:
 2. **Context Window Saturation**: Extended multi-turn mutators and large crossover pools can exceed target context limits. The minimizer mitigates this by aggressively pruning tokens.
 3. **Surrogate Metric Proxies**: Feedback guidance relies on proxy distance signals (embedding divergence and defense-layer triggers). On black-box APIs lacking logprobs or safety metadata, feedback falls back to black-box bandit heuristics.
 4. **Model Scale & Generalization Boundaries**: The empirical benchmarks reported here were gathered on quantized 3B–4B parameter models running under 4-bit precision. Vulnerability rates, bypass frequencies, and tokenizer responses may differ substantially on 70B+ or frontier commercial models.
+5. **Synthetic Target Generalization**: The baseline comparison was conducted against a controlled reference sandbox (`MockTargetAgent`); relative efficacy gains observed in synthetic environments may not directly transfer to complex real-world LLMs.
 
 ---
 
@@ -403,8 +410,9 @@ Sistem gRPC üzerinden konuşan iki bağımsız katmandan oluşur:
 
 1. **Stokastik Yanıt Değişkenliği**: Deterministik oracle'lar hakem model hatalarını önlese de, sıfır olmayan sıcaklık (`temperature > 0`) değerlerinde model yanıtları değişebilir. Regresyon testlerinde `temperature=0.0` kullanılması önerilir.
 2. **Bağlam Uzunluğu Limiti (Context Window)**: Çok adımlı mutasyonlar hedef modelin bağlam penceresini aşabilir. DDmin modülü gereksiz token'ları budayarak bu durumu minimize eder.
-3. **Siyah Kutu Savunma Sinyalleri**: Gray-box geribildirimi guardrail katman skorlarına dayanır. Güvenlik skoru döndürmeyen kapalı kaynak API'lerde fuzzer adaptif bandit heuristiğine geçer.
-4. **Model Ölçeği ve Genelleme Sınırları**: Burada sunulan deneysel veriler 4-bit kuantize edilmiş 3B–4B parametreli modeller üzerinde elde edilmiştir; 70B+ parametreli veya ticari öncü modellere (GPT-4o, Claude 3.5 Sonnet vb.) doğrudan genellenemez.
+3. **Vekil Metrik Sinyalleri**: Geri bildirimli yönlendirme, vekil mesafe sinyallerine dayanır (anlamsal sapma ve kural tetiklenmeleri). Güvenlik puanı döndürmeyen kapalı kaynak API'lerde fuzzer adaptif bandit heuristiğine geçer.
+4. **Model Ölçeği ve Genelleme Sınırları**: Burada sunulan deneysel veriler 4-bit kuantize edilmiş 3B–4B parametreli modeller üzerinde elde edilmiştir; 70B+ parametreli veya güncel ticari modellere doğrudan genellenemez.
+5. **Sentetik Hedef Genellemesi**: Baseline karşılaştırması kuralları belirlenmiş bir referans korumalı ortamda (`MockTargetAgent`) gerçekleştirilmiştir; bu sentetik ortamda elde edilen keşif avantajı doğrudan karmaşık gerçek LLM'lere genellenemez.
 
 ---
 
@@ -433,7 +441,7 @@ AIFuzzer'ın sahte/simüle ajanların ötesinde, gerçek açık kaynaklı ağır
 
 > **Tekrar Edilebilirlik ve Varyans Notu**: Başlangıç tohum havuzunun büyüklüğüne ve mutasyon döngü sayısına göre test metrikleri doğal olarak farklılık gösterir. Örneğin tekil ilk Qwen denemesinde (42 istek / 6 bypass) kullanılan tohum dağılımı ile yukarıdaki çoklu model karşılaştırma koşusunda (44 istek / 8 bypass) kullanılan parametreler birbirinden bağımsızdır; her iki testin de ham SQLite soy ağacı kayıtları repoda izole dosyalarda saklanmaktadır.
 
-### GGUF Modellerinde Gray-Box Sinyali Nasıl Elde Ediliyor?
+### GGUF Modellerinde Vekil (Surrogate) Geri Bildirim Mekanizması
 AIFuzzer, iç tensörlerine ve logit değerlerine erişilemeyen yerel GGUF modelleri test ederken, modelin önüne entegre `GrayBoxEvaluator` (`evaluator.py`) servisini kullanır. Bu bileşen; anlamsal embedding mesafesi (`all-MiniLM-L6-v2`), güvenlik anahtar kelimelerine leksikal yakınlık (near-miss) ve çok katmanlı kural tetiklenmelerini ölçerek MAP-Elites ızgarası için operasyonel bir *vekil (surrogate) kapsam sinyali* üretir. Gateway servisi 3 ana savunma katmanını simüle eder:
 1. **L1 (Sözcüksel Filtreler)**: Regex kontrolleri ve zararlı komut ayırıcı (delimiter) tespiti.
 2. **L2 (Anlamsal Yakınlık)**: Rol yapma ve sanallaştırma niyetine karşı embedding mesafesi.
@@ -453,18 +461,21 @@ AIFuzzer, iç tensörlerine ve logit değerlerine erişilemeyen yerel GGUF model
 
 ### 4. Baseline Karşılaştırması: Geri Bildirimli Arama vs. Siyah Kutu Rastgele Mutasyon
 
-AIFuzzer'ın *"Geri bildirimli arama yönlendirmesi, eşit iterasyon bütçesinde geri bildirimsiz rastgele mutasyondan daha etkilidir"* hipotezini test etmek amacıyla, referans hedef ortamında (**`MockTargetAgent`** — regex politika kuralları ve canary token içeren referans korumalı ortam) **5 bağımsız koşu** (koşu başına 30 iterasyon, ortalama ~248 model değerlendirmesi) gerçekleştirilmiştir:
+AIFuzzer'ın *"Geri bildirimli arama yönlendirmesi, eşit iterasyon bütçesinde geri bildirimsiz rastgele mutasyondan daha etkilidir"* hipotezini test etmek amacıyla, referans hedef ortamında (**`MockTargetAgent`** — regex politika kuralları ve canary token içeren referans korumalı ortam) **20 bağımsız koşu** (koşu başına 30 iterasyon) gerçekleştirilmiştir. Fuzzing süreçlerinde sıkça rastlanan sağa çarpık dağılımlar sebebiyle birincil sağlam metrik olarak **Medyan [Çeyrekler Arası Açıklık: Q1 – Q3]** ve yanında parametrik Ortalama ± Sapma raporlanmıştır:
 
-| Test Stratejisi | Arama Paradigması | Keşfedilen Benzersiz Bypass [^bypass_def_tr] | MAP-Elites Niş Doluluğu (İkincil Metrik) | Model Çalıştırması |
+| Test Stratejisi | Arama Paradigması | Keşfedilen Benzersiz Bypass [^bypass_def_tr] | MAP-Elites Niş Doluluğu (İkincil Metrik) | Model Çalıştırması [^paired_note_tr] |
 | :--- | :--- | :--- | :--- | :--- |
-| **AIFuzzer (Çekirdek)** | **Geri Bildirimli (MAP-Elites + MAB)** | **11.6 ± 12.8** | **27.6 ± 0.9 niş** (%51.1) | 248.4 ± 16.1 |
-| **Rastgele Baseline** | Siyah Kutu (Geri Bildirimsiz Tekdüze Mutasyon) | 6.2 ± 5.3 | 11.4 ± 0.6 niş (%21.1) | 248.4 ± 16.1 |
+| **AIFuzzer (Çekirdek)** | **Geri Bildirimli (MAP-Elites + MAB)** | **13.5 [6.0 – 32.0]** *(Ort: 19.6 ± 20.7)* | **29.0 [27.0 – 30.0]** *(Ort: 27.9 ± 3.0)* | 254.0 [247.0 – 261.0] |
+| **Rastgele Baseline** | Siyah Kutu (Geri Bildirimsiz Tekdüze Mutasyon) | **6.5 [2.0 – 16.0]** *(Ort: 9.4 ± 9.5)* | **11.0 [10.0 – 11.0]** *(Ort: 10.4 ± 1.2)* | 254.0 [247.0 – 261.0] |
 
 [^bypass_def_tr]: Triage kümelemesi öncesinde canary token sızdıran veya yetki sınırını aşan birbirinden farklı ham saldırı istemi dizgileri olarak tanımlanır.
+[^paired_note_tr]: **Eşleştirilmiş bütçe protokolü (paired budget protocol)**: Her rastgele baseline denemesi, bütçe eşitliğini kesinleştirmek için ilgili AIFuzzer tohumunun tükettiği hedef model istek sayısını birebir miras alır.
 
-**Gözlem ve Değerlendirme**: Eşit iterasyon kısıtı altında geri bildirimli arama daha yüksek bir ortalama bypass keşfi sağlamıştır (`11.6` vs `6.2`). Bunun olası bir açıklaması, niş tabanlı koruma mekanizmasının mutasyonları tek bir saldırı kalıbına sıkıştırmayıp farklı uzunluk ve savunma katmanları boyunca çeşitlendirmesidir.
+**İstatistiksel Değerlendirme & Şeffaflık Notu**:
+- **Bypass Keşfi**: Geri bildirimli aramada bypass medyanı **2.08 kat daha yüksek** gerçekleşmiştir (`13.5` vs `6.5`). Ancak fuzzing kampanyaları arasındaki stokastik varyans yüksek olduğundan (standart sapma ortalamaya yakın), kısa süreli tekil koşularda iki yöntem kesişebilmektedir; güvenilir ayrım için genişletilmiş iterasyon bütçeleri gerekir.
+- **Niş Kapsamı**: İkincil metrik olan niş doluluğu (`29.0` vs `11.0`), MAP-Elites mekanizması tarafından yapısal olarak optimize edilir ve aramanın tek bir mutatör tipine kilitlenmesini engellediğini doğrular.
 
-*(5 koşulu istatistiksel ham karşılaştırma verisi için [examples/baseline_comparison.json](examples/baseline_comparison.json) dosyasını inceleyebilirsiniz).*
+*(20 koşulu istatistiksel ham karşılaştırma verisi için [examples/baseline_comparison.json](examples/baseline_comparison.json) dosyasını inceleyebilirsiniz).*
 
 ---
 
